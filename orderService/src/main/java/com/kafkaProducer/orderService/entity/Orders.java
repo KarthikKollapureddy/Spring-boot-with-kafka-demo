@@ -1,6 +1,7 @@
 package com.kafkaProducer.orderService.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,11 +23,16 @@ public class Orders {
 //    @Column(name = "products")
     private List<String> products;
     private Float amount;
+    @Column(nullable = false)
     private LocalDateTime paymentDateTime;
+    @Column(nullable = false)
+    @Email(message = "Enter a valid email")
+    private String customerEmail;
 
-    public Orders(List<String> products, Float amount, LocalDateTime paymentDateTime) {
+    public Orders(List<String> products, Float amount, LocalDateTime paymentDateTime, String customerEmail) {
         this.products = products;
         this.amount = amount;
         this.paymentDateTime = paymentDateTime;
+        this.customerEmail = customerEmail;
     }
 }

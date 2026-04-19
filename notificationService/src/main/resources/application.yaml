@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: notificationService
+
+  # JPA Configuration
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: create-drop
+
+  # Database Configuration (H2)
+  datasource:
+    username: sa
+    password: sa
+    url: jdbc:h2:mem:notification
+
+  h2:
+    console:
+      enabled: true
+      path: /h2
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    consumer:
+      group-id: notification-service-group
+      auto-offset-reset: earliest  # Start from beginning if group is new
+      key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+#      value-deserializer: org.springframework.kafka.support.serializer.ByteArrayDeserializer
+
+      properties:
+        # Map JSON to OrderEvent class
+        spring.json.type.mapping: orderEvent:com.kafkaConsumer.notificationService.event.OrderEvent
+        spring.json.trusted.packages: "*"
+
+      # Consumer behavior
+      enable-auto-commit: false  # Manual acknowledgment
+      fetch-min-bytes: 1 # Broker responds as soon as 1 byte is available
+      fetch-max-wait-ms: 5000 # But waits max 5 seconds to accumulate data
+      max-poll-records: 10 # Return max 10 records per poll
+      session-timeout-ms: 30000
+
+  # Mail Configuration (Gmail example)
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            protocols: TLSv1.2
+
+# Server Configuration
+server:
+  port: 8086
+  servlet:
+    context-path: /notification-service
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.kafkaConsumer: DEBUG
+    org.springframework.kafka: DEBUG
+    org.springframework.mail: DEBUG
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+  endpoint:
+    health:
+      show-details: always
