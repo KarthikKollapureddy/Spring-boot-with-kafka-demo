@@ -51,13 +51,19 @@ public class KafkaConsumerConfig {
 
         // Consumer behavior
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // Manual commit
+//        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // Manual commit
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);      // Max records per poll
 
         // Fetch settings
         props.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1);
         props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 1000);
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+
+        // read_committed: only consume messages from committed Kafka transactions.
+        // Without this (default is read_uncommitted), the consumer could read messages
+        // from a transaction that later gets aborted — processing data that was rolled back.
+        // Required because the producer uses transaction-id-prefix (Kafka transactions enabled).
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
 
         return new DefaultKafkaConsumerFactory<>(props);
     }
@@ -67,13 +73,15 @@ public class KafkaConsumerConfig {
         ConcurrentKafkaListenerContainerFactory<Long, OrderEvent> containerFactory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         containerFactory.setConsumerFactory(consumerFactory());
+//        AckMode.MANUAL removed — @RetryableTopic manages acks internally using RECORD mode.
+//        Manual ack conflicts with retry topic internals (it needs to ack the original before routing to retry topic).
+//        containerFactory.getContainerProperties()
+//                .setAckMode(ContainerProperties.AckMode.MANUAL);
 
-        // Manual acknowledgment - must explicitly call ack.acknowledge()
-        containerFactory.getContainerProperties()
-                .setAckMode(ContainerProperties.AckMode.MANUAL);
-
-        // Concurrency - number of threads processing messages
-        containerFactory.setConcurrency(1); // Can increase for parallel processing
+        // Concurrency - number of consumer threads processing messages in parallel
+        // Should match the partition count of the topic (order-events has 3 partitions)
+        // Each thread is assigned 1 or more partitions from the consumer group
+        containerFactory.setConcurrency(3);
 
         // Error handling
         containerFactory.setCommonErrorHandler(kafkaErrorHandler());

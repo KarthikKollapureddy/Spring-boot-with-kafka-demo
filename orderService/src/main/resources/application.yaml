@@ -18,10 +18,14 @@ spring:
 
 #---kafka-producer-start---
   kafka:
-    # Kafka broker address - where Kafka cluster is running
-    bootstrap-servers: localhost:9092
+    # Multi-broker Kafka cluster — lists all 3 brokers for redundancy.
+    # Only 1 is needed for discovery (Kafka returns full cluster metadata),
+    # but listing all 3 provides resilience if one broker is down at startup.
+    bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
     topic:
       name: order-events
+      partitioncount: 3
+      replicas: 3    # must be <= broker count (we have 3 brokers in docker-compose)
     # ===== PRODUCER CONFIG (OrderProducer Service) =====
     producer:
       # Serializes Long orderId to bytes - ensures key is consistently typed
@@ -34,6 +38,14 @@ spring:
       # Enables idempotent producer: prevents duplicate messages even if producer retries
       # Guarantees: Exactly-once semantics at PRODUCER level
       enable-idempotence: true
+
+      # Kafka Transactions: ensures DB save + Kafka send are atomic.
+      # Problem: without this, if DB save succeeds but Kafka send fails, order exists but no event is published.
+      # With transactions: if send fails, the transaction aborts and message is discarded.
+      # Each producer instance gets a unique transactional.id (prefix + instance suffix)
+      # acks=all and enable-idempotence=true are automatically enforced when transactional.
+      transaction-id-prefix: order-tx-
+
       # Retry failed sends up to 3 times before giving up
       # Provides: Resilience against temporary network failures
       retries: 3
