@@ -3,5 +3,5 @@ package com.kafkaProducer.orderService.event;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record OrderEvent(Long id, List<String> products, Float amount, LocalDateTime paymentDateTime) {
+public record OrderEvent(Long id, List<String> products, Float amount, LocalDateTime paymentDateTime, String customerEmail) {
 }

@@ -48,6 +48,7 @@ public class OrderProcessorImpl implements OrderProcessor {
         Orders receivedOrder = Orders.builder()
                 .products(order.products())
                 .paymentDateTime(orderDateTime)
+                .customerEmail(order.customerEmail())
                 .amount(order.amount()).build();
         long orderID = saveOrderToDB(receivedOrder);
         if (orderID > 0) {
@@ -62,7 +63,8 @@ public class OrderProcessorImpl implements OrderProcessor {
                         orderID,
                         receivedOrder.getProducts(),
                         receivedOrder.getAmount(),
-                        receivedOrder.getPaymentDateTime()
+                        receivedOrder.getPaymentDateTime(),
+                        receivedOrder.getCustomerEmail()
                 );
 
                 log.info("--------Sending to kafka-----------");
@@ -79,7 +81,7 @@ public class OrderProcessorImpl implements OrderProcessor {
     }
 
     @Transactional
-    private long saveOrderToDB(Orders order) {
+    public long saveOrderToDB(Orders order) {
         try {
             Orders savedOrder = ordersRepository.save(order);
             log.info("Successfully saved order with ID: {}", savedOrder.getId());
@@ -91,7 +93,7 @@ public class OrderProcessorImpl implements OrderProcessor {
     }
 
     @Transactional
-    private long saveProcessOrderToDB(ProcessedOrders order) {
+    public long saveProcessOrderToDB(ProcessedOrders order) {
         try {
             ProcessedOrders processedOrder = processedOrderRepository.save(order);
             log.info("Successfully saved processedOrder with ID: {}", processedOrder.getOrderId());
