@@ -35,9 +35,9 @@ Filter notifications by status: `SUCCESS`, `FAILED`, `PENDING`, `RETRYING`.
 
 | Class | Role |
 |---|---|
-| `OrderEventConsumer` | `@KafkaListener` — consumes from `order-events` topic with manual acknowledgment |
+| `OrderEventConsumer` | `@KafkaListener` with `@RetryableTopic` — consumes from `order-events` with automatic retry + DLT |
 | `NotificationService` / `NotificationServiceImpl` | Sends email via `JavaMailSender`, saves notification to DB |
-| `KafkaConsumerConfig` | Custom consumer factory with `JacksonJsonDeserializer`, manual ack mode, error handler |
+| `KafkaConsumerConfig` | Custom consumer factory with `JacksonJsonDeserializer`, `setConcurrency(3)`, `read_committed` isolation |
 | `NotificationController` | REST endpoints to query notification status |
 | `Notification` | JPA entity — tracks notification outcome per order |
 | `NotificationRepository` | Spring Data JPA — find by orderId, check existence |
@@ -54,12 +54,24 @@ Custom `KafkaConsumerConfig` bean overrides Spring auto-config:
 | `key-deserializer` | `LongDeserializer` | Matches producer's Long key |
 | `value-deserializer` | `JacksonJsonDeserializer` | Deserializes JSON to `OrderEvent` |
 | `auto-offset-reset` | `earliest` | Start from beginning for new groups |
-| `enable-auto-commit` | `false` | Manual acknowledgment only |
-| `max-poll-records` | `10` | Bounded batch per poll |
+| `isolation.level` | `read_committed` | Only reads committed transactional messages |
 | `fetch-min-bytes` | `1` | Long polling: respond immediately when data available |
 | `fetch-max-wait-ms` | `5000` | Long polling: broker waits up to 5s if no data |
 | `session-timeout-ms` | `30000` | Consumer considered dead after 30s of no heartbeat |
-| `AckMode` | `MANUAL` | Must call `ack.acknowledge()` explicitly |
+| `concurrency` | `3` | 3 consumer threads matching 3 partitions |
+
+## Retry Topics & Dead Letter Topic
+
+`@RetryableTopic(attempts=4, backoff=@BackOff(delay=1000, multiplier=2.0))` on the listener:
+- If processing fails, message is sent to retry topics (`order-events-retry-0`, `-retry-1`, `-retry-2`)
+- Exponential backoff: 1s → 2s → 4s
+- After 4 total attempts, message goes to DLT (`order-events-dlt`)
+- `@DltHandler` saves notification with FAILED status to DB
+- `SUFFIX_WITH_INDEX_VALUE` strategy for clear retry topic naming
+
+## Multi-Broker Cluster
+
+Connects to 3 Kafka brokers (`localhost:9092,9093,9094`). `read_committed` isolation ensures the consumer only sees messages from committed producer transactions.
 
 ## Idempotency
 
