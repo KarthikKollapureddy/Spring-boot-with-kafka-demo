@@ -60,16 +60,9 @@ public class NotificationServiceImpl implements NotificationService {
                 log.info("Successfully sent notification for order {}", orderEvent.id());
             } catch (Exception e){
                 log.error("Failed to send notification for order with ID {} with Exception {}", orderEvent.id(), e.getMessage());
-                Notification notification
-                        = Notification.builder()
-                        .recipientEmail(orderEvent.customerEmail())
-                        .orderId(orderEvent.id())
-                        .sentAt(LocalDateTime.now())
-                        .statusMessage(StatusMessage.FAILED)
-                        .errorMessage(e.getMessage())
-                        .createdAt(orderEvent.paymentDateTime())
-                        .build();
-                notificationRepository.save(notification);
+                // FAILED save removed — @RetryableTopic will retry this message via retry topics.
+                // If we saved FAILED here, existsByOrderId() would return true on retry and skip reprocessing.
+                // Only @DltHandler saves FAILED status (after all retries are exhausted).
                 throw new RuntimeException("Failed to send notification for order with ID ".concat(String.valueOf(orderEvent.id())));
             }
 

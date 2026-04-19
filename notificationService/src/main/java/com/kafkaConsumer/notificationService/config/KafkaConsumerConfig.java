@@ -51,7 +51,7 @@ public class KafkaConsumerConfig {
 
         // Consumer behavior
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // Manual commit
+//        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false); // Manual commit
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);      // Max records per poll
 
         // Fetch settings
@@ -67,10 +67,10 @@ public class KafkaConsumerConfig {
         ConcurrentKafkaListenerContainerFactory<Long, OrderEvent> containerFactory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         containerFactory.setConsumerFactory(consumerFactory());
-
-        // Manual acknowledgment - must explicitly call ack.acknowledge()
-        containerFactory.getContainerProperties()
-                .setAckMode(ContainerProperties.AckMode.MANUAL);
+//        AckMode.MANUAL removed — @RetryableTopic manages acks internally using RECORD mode.
+//        Manual ack conflicts with retry topic internals (it needs to ack the original before routing to retry topic).
+//        containerFactory.getContainerProperties()
+//                .setAckMode(ContainerProperties.AckMode.MANUAL);
 
         // Concurrency - number of consumer threads processing messages in parallel
         // Should match the partition count of the topic (order-events has 3 partitions)
