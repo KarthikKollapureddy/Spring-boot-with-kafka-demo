@@ -59,6 +59,12 @@ public class KafkaConsumerConfig {
         props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 1000);
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
 
+        // read_committed: only consume messages from committed Kafka transactions.
+        // Without this (default is read_uncommitted), the consumer could read messages
+        // from a transaction that later gets aborted — processing data that was rolled back.
+        // Required because the producer uses transaction-id-prefix (Kafka transactions enabled).
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+
         return new DefaultKafkaConsumerFactory<>(props);
     }
 

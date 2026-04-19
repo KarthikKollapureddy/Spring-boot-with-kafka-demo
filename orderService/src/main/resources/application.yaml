@@ -36,6 +36,14 @@ spring:
       # Enables idempotent producer: prevents duplicate messages even if producer retries
       # Guarantees: Exactly-once semantics at PRODUCER level
       enable-idempotence: true
+
+      # Kafka Transactions: ensures DB save + Kafka send are atomic.
+      # Problem: without this, if DB save succeeds but Kafka send fails, order exists but no event is published.
+      # With transactions: if send fails, the transaction aborts and message is discarded.
+      # Each producer instance gets a unique transactional.id (prefix + instance suffix)
+      # acks=all and enable-idempotence=true are automatically enforced when transactional.
+      transaction-id-prefix: order-tx-
+
       # Retry failed sends up to 3 times before giving up
       # Provides: Resilience against temporary network failures
       retries: 3
