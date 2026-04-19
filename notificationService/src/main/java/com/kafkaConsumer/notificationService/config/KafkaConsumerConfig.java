@@ -72,8 +72,10 @@ public class KafkaConsumerConfig {
         containerFactory.getContainerProperties()
                 .setAckMode(ContainerProperties.AckMode.MANUAL);
 
-        // Concurrency - number of threads processing messages
-        containerFactory.setConcurrency(1); // Can increase for parallel processing
+        // Concurrency - number of consumer threads processing messages in parallel
+        // Should match the partition count of the topic (order-events has 3 partitions)
+        // Each thread is assigned 1 or more partitions from the consumer group
+        containerFactory.setConcurrency(3);
 
         // Error handling
         containerFactory.setCommonErrorHandler(kafkaErrorHandler());

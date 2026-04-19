@@ -22,6 +22,8 @@ spring:
     bootstrap-servers: localhost:9092
     topic:
       name: order-events
+      partitioncount: 3
+      replicas: 1    # must be <= broker count (we have 1 broker in docker-compose)
     # ===== PRODUCER CONFIG (OrderProducer Service) =====
     producer:
       # Serializes Long orderId to bytes - ensures key is consistently typed
