@@ -21,7 +21,8 @@ spring:
 
   # Kafka Configuration
   kafka:
-    bootstrap-servers: localhost:9092
+    # Multi-broker Kafka cluster — lists all 3 brokers for redundancy at startup.
+    bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
 
     consumer:
       group-id: notification-service-group

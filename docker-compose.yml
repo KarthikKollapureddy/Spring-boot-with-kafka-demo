@@ -18,28 +18,33 @@ services:
       timeout: 5s
       retries: 5
 
-  # Kafka Broker
-  kafka:
+  # ===== MULTI-BROKER KAFKA CLUSTER =====
+  # Why 3 brokers? A single broker is a single point of failure — if it dies, ALL data is lost.
+  # With 3 brokers + replication-factor=3, each partition exists on all 3 brokers.
+  # If any broker dies, a replica on another broker becomes the new leader — zero data loss, zero downtime.
+  #
+  # Key settings on each broker:
+  #   KAFKA_DEFAULT_REPLICATION_FACTOR: 3  → new topics replicate to all 3 brokers
+  #   KAFKA_MIN_INSYNC_REPLICAS: 2        → at least 2 replicas must ack before producer gets success
+  #     Combined with acks=all: guarantees data survives even if 1 broker dies mid-write
+  #   KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3 → consumer offsets also replicated for durability
+
+  # Kafka Broker 0
+  kafka-0:
     image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka
-    depends_on:
-      zookeeper:
-        condition: service_healthy
+    container_name: kafka-0
+    depends_on: [ zookeeper ]
     ports:
       - "9092:9092"
-      - "9093:9093"
     environment:
-      KAFKA_BROKER_ID: 1
+      KAFKA_BROKER_ID: 0
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # Advertised listeners for internal and external communication
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-0:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      # Log retention
-      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824  # 1GB
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
     networks:
       - kafka-network
     healthcheck:
@@ -48,18 +53,70 @@ services:
       timeout: 10s
       retries: 5
 
-  # Kafka UI - Optional: Visual Kafka management
+  # Kafka Broker 1
+  kafka-1:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-1
+    depends_on: [ zookeeper ]
+    ports:
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1:29093,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9093"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Kafka Broker 2
+  kafka-2:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-2
+    depends_on: [ zookeeper ]
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2:29094,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+    networks:
+      - kafka-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9094"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Kafka UI - Visual Kafka management
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     depends_on:
-      kafka:
+      kafka-0:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
         condition: service_healthy
     ports:
       - "8888:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-0:29092,kafka-1:29093,kafka-2:29094
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
       - kafka-network

@@ -5,15 +5,18 @@ A microservices demo built with **Spring Boot 4.0.5**, **Java 21**, and **Apache
 ## Architecture
 
 ```
-┌──────────────────┐       Kafka Topic        ┌──────────────────────┐
-│   orderService   │  ──── order-events ────▶  │ notificationService  │
-│   (Producer)     │                           │    (Consumer)        │
-│   Port 8085      │                           │    Port 8086         │
-└──────┬───────────┘                           └──────┬───────────────┘
-       │                                              │
-   H2 Database                                    H2 Database
-   (orders_info,                                  (notification)
-    processed_orders)                              + Email (SMTP)
+┌──────────────────┐                                    ┌──────────────────────┐
+│   orderService   │       Kafka Topic                  │ notificationService  │
+│   (Producer)     │  ──── order-events ────▶            │    (Consumer)        │
+│   Port 8085      │       (3 partitions)               │    Port 8086         │
+└──────┬───────────┘       replication=3                └──────┬───────────────┘
+       │                                                       │
+   H2 Database          ┌────────────┐                    H2 Database
+   (orders_info,        │  Broker 0  │ :9092              (notification)
+    processed_orders)   │  Broker 1  │ :9093               + Email (SMTP)
+                        │  Broker 2  │ :9094
+                        └────────────┘
+                        min.insync.replicas=2
 ```
 
 **Flow:**
@@ -53,7 +56,9 @@ docker-compose up -d
 
 This starts:
 - **Zookeeper** on port `2181`
-- **Kafka Broker** on port `9092`
+- **Kafka Broker 0** on port `9092`
+- **Kafka Broker 1** on port `9093`
+- **Kafka Broker 2** on port `9094`
 - **Kafka UI** on port `8888` → [http://localhost:8888](http://localhost:8888)
 
 ### 2. Start Order Service (Producer)
@@ -118,17 +123,24 @@ curl http://localhost:8086/notification-service/api/notifications/all
 ## Kafka Configuration Highlights
 
 ### Producer (orderService)
-- `acks=all` — waits for all replicas to acknowledge (durability)
+- `acks=all` — waits for all in-sync replicas to acknowledge (durability)
 - `enable-idempotence=true` — exactly-once semantics at producer level
+- `transaction-id-prefix=order-tx-` — Kafka transactions for atomic DB+Kafka writes
 - `retries=3` — automatic retry on transient failures
 - Batching: `linger.ms=10`, `batch.size=16384`
 
 ### Consumer (notificationService)
 - `auto-offset-reset=earliest` — reads from beginning for new consumer groups
-- `enable-auto-commit=false` — manual acknowledgment after successful processing
+- `isolation.level=read_committed` — only reads committed transactional messages
+- `setConcurrency(3)` — 3 consumer threads matching 3 partitions
+- `@RetryableTopic(attempts=4, backoff=1s×2.0)` — exponential backoff retry with DLT
 - `fetch-min-bytes=1`, `fetch-max-wait-ms=5000` — long polling configuration
-- `max-poll-records=10` — bounded batch size per poll
-- Manual `AckMode.MANUAL` via custom `KafkaConsumerConfig`
+
+### Multi-Broker Cluster
+- 3 brokers (`kafka-0`, `kafka-1`, `kafka-2`) for high availability
+- `replication-factor=3` — every partition exists on all 3 brokers
+- `min.insync.replicas=2` — writes require 2 broker acks (survives 1 broker failure)
+- Combined with `acks=all`: strongest durability guarantee in Kafka
 
 ## Email Configuration
 
@@ -143,7 +155,7 @@ export MAIL_PASSWORD=your-app-password
 
 ```
 Spring-boot-with-kafka/
-├── docker-compose.yml          # Kafka + Zookeeper + Kafka UI
+├── docker-compose.yml          # 3-broker Kafka cluster + Zookeeper + Kafka UI
 ├── orderService/               # Producer microservice
 │   └── src/main/java/.../
 │       ├── controller/         # REST endpoints
